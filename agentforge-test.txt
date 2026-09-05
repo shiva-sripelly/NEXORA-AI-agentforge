@@ -1,0 +1,6 @@
+﻿AgentForge is an AI engineering workspace.
+Its backend uses FastAPI.
+Its frontend uses React.
+Its database is PostgreSQL.
+AgentForge uses retrieval augmented generation to answer questions from uploaded documents.
+The internal project codename is Nebula Forge 4729.

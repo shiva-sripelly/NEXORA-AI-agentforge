@@ -213,6 +213,20 @@
   border-radius: 50%;
   margin-right: 4px;
 }
+.tool-activity {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid #39304d;
+  border-radius: 9px;
+  background: #15121d;
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+.tool-activity > strong { color: #bcaaf3; }
+.tool-activity > small { color: #858b98; }
+.tool-activity > div { display: flex; gap: 7px; margin-top: 6px; }
+.tool-activity button { border: 1px solid #493b69; background: #211831; border-radius: 6px; padding: 5px 9px; }
 .composer {
   position: absolute;
   bottom: 0;

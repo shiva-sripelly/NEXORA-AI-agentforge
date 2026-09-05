@@ -1,0 +1,188 @@
+.documents-page {
+  padding: 40px;
+  max-width: 1200px;
+  margin: auto;
+}
+.documents-page > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+}
+.documents-page h1 {
+  font: 700 32px Manrope;
+  margin: 7px 0;
+}
+.documents-page header small {
+  color: #9a7af5;
+}
+.documents-page header p {
+  color: #7b8290;
+}
+.documents-page header button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 11px 15px;
+  background: #8057ec;
+  border: 0;
+  border-radius: 9px;
+}
+.documents-page svg {
+  width: 18px;
+}
+.drop-zone {
+  margin: 28px 0;
+  border: 1px dashed #454052;
+  border-radius: 14px;
+  min-height: 155px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: #121019;
+  cursor: pointer;
+}
+.drop-zone svg {
+  color: #a181f7;
+  width: 28px;
+}
+.drop-zone span,
+.documents-empty span {
+  color: #6f7684;
+  font-size: 12px;
+}
+.document-table {
+  border: 1px solid #252832;
+  border-radius: 12px;
+  background: #101218;
+  overflow: hidden;
+}
+.table-head {
+  padding: 16px;
+  border-bottom: 1px solid #252832;
+  font-weight: 600;
+}
+.table-head span {
+  color: #666d79;
+  font-size: 11px;
+  margin-left: 8px;
+}
+.document-table article {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #1e222b;
+}
+.document-table article > svg {
+  color: #9171ed;
+}
+.document-table article > div {
+  display: grid;
+  flex: 1;
+}
+.document-table article small {
+  color: #6d7481;
+}
+.document-table article button {
+  background: none;
+  border: 0;
+  color: #717887;
+}
+.document-table article .use-chat {
+  width: auto;
+  color: #bcaaf3;
+  border: 1px solid #45356a;
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.document-table article em {
+  color: #f59da8;
+  font-size: 11px;
+  font-style: normal;
+}
+.doc-status {
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  border-radius: 12px;
+}
+.doc-status.ready {
+  color: #45d7ae;
+  background: #10b98118;
+}
+.doc-status.uploaded,
+.doc-status.processing {
+  color: #f5c96a;
+  background: #f59e0b18;
+}
+.doc-status.failed {
+  color: #fb8d9b;
+  background: #e11d4818;
+}
+.documents-empty {
+  height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.document-error {
+  color: #fda4af;
+}
+.knowledge-select {
+  position: absolute;
+  bottom: 94px;
+  left: 50%;
+  translate: -50%;
+  width: min(820px, calc(100% - 40px));
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  z-index: 2;
+}
+.knowledge-select select,
+.knowledge-select button {
+  border: 1px solid #302943;
+  background: #17131f;
+  color: #bcaaf3;
+  border-radius: 15px;
+  padding: 5px 9px;
+  font-size: 10px;
+}
+@media (max-width: 600px) {
+  .documents-page {
+    padding: 25px 15px;
+  }
+  .documents-page > header {
+    align-items: start;
+  }
+  .documents-page header p {
+    display: none;
+  }
+}
+
+/* Keep wrapped source chips and errors above the composer without overlap. */
+.chat-main .messages { min-height: 0; padding-bottom: 24px; }
+.chat-main .knowledge-select,
+.chat-main .composer,
+.chat-main .chat-error {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  translate: none;
+  flex-shrink: 0;
+  margin: 8px auto;
+  width: min(820px, calc(100% - 40px));
+}
+.knowledge-select { max-height: 140px; overflow-y: auto; }
+.message-sources { display: grid; gap: 4px; margin-top: 12px; font-size: 12px; color: #bcaaf3; }
+.message-sources span { overflow-wrap: anywhere; }
+.document-table article > div { min-width: 0; overflow-wrap: anywhere; }
+.documents-page button:disabled, .knowledge-select button:disabled { opacity: .5; cursor: default; }
+@media (max-width: 600px) {
+  .document-table article { flex-wrap: wrap; }
+}

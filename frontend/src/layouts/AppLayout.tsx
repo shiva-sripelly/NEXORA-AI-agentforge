@@ -23,7 +23,7 @@ const links = [
   ["/app/chat", "Workspace", Command],
   ["/app/agents", "Agents", Bot],
   ["/app/knowledge", "Knowledge Base", BookOpen],
-  ["/app/mcp", "MCP Tools", PlugZap],
+  ["/app/tools", "MCP Tools", PlugZap],
   ["/app/runs", "Agent Runs", Workflow],
   ["/app/analytics", "Analytics", ChartNoAxesCombined],
   ["/app/settings", "Settings", Settings],

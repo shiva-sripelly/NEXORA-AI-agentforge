@@ -26,3 +26,5 @@ class Message(UUIDMixin, Base):
     token_count:Mapped[int|None]=mapped_column(Integer,nullable=True)
     created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now(),index=True)
     conversation=relationship("Conversation",back_populates="messages")
+    sources=relationship("MessageSource",cascade="all, delete-orphan",lazy="selectin")
+    tool_calls=relationship("ToolCall",lazy="selectin")

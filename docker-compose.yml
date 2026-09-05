@@ -17,15 +17,28 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://agentforge:agentforge@postgres:5432/agentforge
       SECRET_KEY: ${SECRET_KEY:-local-development-secret-change-before-production}
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5174}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-groq}
       DEFAULT_LLM_MODEL: ${DEFAULT_LLM_MODEL:-}
       MAX_CHAT_HISTORY_MESSAGES: ${MAX_CHAT_HISTORY_MESSAGES:-20}
       MAX_CHAT_MESSAGE_LENGTH: ${MAX_CHAT_MESSAGE_LENGTH:-10000}
+      DEFAULT_EMBEDDING_PROVIDER: ${DEFAULT_EMBEDDING_PROVIDER:-sentence_transformers}
+      DEFAULT_EMBEDDING_MODEL: ${DEFAULT_EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      EMBEDDING_DIMENSION: "384"
+      MAX_DOCUMENT_SIZE_MB: ${MAX_DOCUMENT_SIZE_MB:-10}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-800}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-120}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      DOCUMENT_STORAGE_PATH: storage/documents
+      MCP_FILE_ROOT: storage/mcp_workspace
+      MCP_SERVER_ROOT: /app/mcp_servers
+      MCP_TIMEOUT_SECONDS: ${MCP_TIMEOUT_SECONDS:-15}
     ports: ["8000:8000"]
     depends_on:
       postgres: {condition: service_healthy}
+    volumes: [document_storage:/app/storage/documents, mcp_workspace:/app/storage/mcp_workspace, embedding_cache:/root/.cache/huggingface]
   frontend:
     build:
       context: ./frontend
@@ -34,3 +47,6 @@ services:
     depends_on: [backend]
 volumes:
   agentforge_data:
+  document_storage:
+  embedding_cache:
+  mcp_workspace:

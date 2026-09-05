@@ -1,3 +1,5 @@
+import type { ToolCall } from "./mcp";
+
 export type Conversation = {
   id: string;
   title: string;
@@ -6,6 +8,14 @@ export type Conversation = {
   created_at: string;
   updated_at: string;
 };
+export type Source = {
+  document_id: string | null;
+  document_chunk_id: string | null;
+  document_name: string;
+  page: number | null;
+  rank: number;
+  score: number;
+};
 export type Message = {
   id: string;
   conversation_id: string;
@@ -13,6 +23,8 @@ export type Message = {
   content: string;
   token_count: number | null;
   created_at: string;
+  sources?: Source[];
+  tool_calls?: ToolCall[];
 };
 export type ConversationList = {
   items: Conversation[];
