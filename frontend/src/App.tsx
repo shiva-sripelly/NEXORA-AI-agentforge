@@ -9,6 +9,7 @@ import { Landing } from "./pages/Landing";
 import { ChatWorkspace } from "./pages/ChatWorkspace";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { MCPPage } from "./pages/MCPPage";
+import { AgentRunsPage } from "./pages/AgentRunsPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -26,6 +27,8 @@ export default function App() {
               <Route path="knowledge" element={<DocumentsPage />} />
               <Route path="tools" element={<MCPPage />} />
               <Route path="mcp" element={<MCPPage />} />
+              <Route path="agents" element={<AgentRunsPage />} />
+              <Route path="runs" element={<AgentRunsPage />} />
               <Route path="*" element={<ComingSoon />} />
             </Route>
           </Route>

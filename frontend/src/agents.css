@@ -1,0 +1,89 @@
+.chat-mode-toggle {
+  width: min(820px, calc(100% - 40px));
+  margin: 8px auto 0;
+  padding: 3px;
+  display: flex;
+  align-self: center;
+  flex-shrink: 0;
+  border: 1px solid #29243a;
+  border-radius: 10px;
+  background: #111019;
+}
+.chat-mode-toggle button {
+  flex: 1;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #777e8c;
+  font-size: 11px;
+}
+.chat-mode-toggle button.active { background: #6f48dc; color: white; }
+.agent-run-card {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #332b47;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #14111d, #0f1117);
+}
+.agent-live-events {
+  margin: 18px 0;
+  padding: 14px;
+  display: grid;
+  gap: 5px;
+  border: 1px solid #332b47;
+  border-radius: 11px;
+  background: #121019;
+}
+.agent-live-events strong { color: #c8b7f8; font-size: 12px; }
+.agent-live-events span { color: #7e8593; font-size: 10px; text-transform: capitalize; }
+.agent-live-events button { justify-self: start; padding: 5px 9px; border: 1px solid #493b69; border-radius: 6px; background: #211831; font-size: 10px; }
+.agent-run-card > header { display: flex; justify-content: space-between; gap: 16px; }
+.agent-run-card > header div { display: grid; gap: 4px; }
+.agent-run-card > header small, .agent-history-page > header small { color: #9d7bff; font-size: 9px; letter-spacing: 1px; }
+.agent-run-card > header strong { font-size: 13px; }
+.agent-run-status {
+  height: fit-content;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: #312549;
+  color: #c9b8fa;
+  font-size: 9px;
+  text-transform: capitalize;
+}
+.agent-run-status.completed { background: #12372e; color: #78e3c2; }
+.agent-run-status.failed, .agent-run-status.max_steps_reached { background: #391a22; color: #f7a0ad; }
+.agent-run-status.cancelled { background: #282b32; color: #a3a8b2; }
+.agent-progress { height: 3px; margin: 13px 0 5px; overflow: hidden; border-radius: 2px; background: #292633; }
+.agent-progress span { display: block; height: 100%; background: #895ff2; transition: width .2s; }
+.agent-run-card > p { margin: 0 0 10px; color: #707786; font-size: 9px; }
+.agent-step-list { display: grid; gap: 7px; }
+.agent-step-list article { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 9px; border: 1px solid #262a34; border-radius: 8px; background: #0d0f14; }
+.agent-step-list article > svg { width: 16px; color: #777d89; }
+.agent-step-list article.completed > svg { color: #45d6aa; }
+.agent-step-list article.failed > svg { color: #fb7185; }
+.agent-step-list article.awaiting_approval > svg { color: #f1ba64; }
+.agent-step-list article > div { display: grid; gap: 2px; }
+.agent-step-list strong { font-size: 11px; }
+.agent-step-list small { color: #747b89; font-size: 9px; }
+.agent-step-error, .agent-run-error { color: #f8a4b0 !important; }
+.agent-approval { display: flex; gap: 7px; margin-top: 6px; }
+.agent-approval button, .agent-cancel { padding: 5px 9px; border: 1px solid #493b69; border-radius: 6px; background: #211831; font-size: 10px; }
+.agent-run-error { margin-top: 9px; padding: 8px; border-radius: 7px; background: #32171e; font-size: 11px; }
+.agent-cancel { margin-top: 10px; color: #c4b9dc; }
+.agent-history-page { padding: 38px; max-width: 1200px; margin: auto; }
+.agent-history-page > header h1 { margin: 7px 0; font: 700 32px Manrope; }
+.agent-history-page > header p { margin: 0 0 24px; color: #7d8492; }
+.agent-history-grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; }
+.agent-history-grid > aside, .agent-history-grid > main { min-height: 460px; padding: 12px; border: 1px solid #242832; border-radius: 12px; background: #101218; }
+.agent-history-grid > aside { display: flex; flex-direction: column; gap: 7px; }
+.agent-history-grid > aside button { display: grid; gap: 4px; padding: 11px; border: 1px solid transparent; border-radius: 8px; background: #15171e; text-align: left; }
+.agent-history-grid > aside button.active { border-color: #6145a5; background: #1a1526; }
+.agent-history-grid > aside strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.agent-history-grid > aside small, .agent-history-grid p { color: #707785; font-size: 9px; }
+.agent-history-grid .agent-run-card { margin: 0; }
+@media (max-width: 800px) {
+  .agent-history-page { padding: 24px 15px; }
+  .agent-history-grid { grid-template-columns: 1fr; }
+  .agent-history-grid > aside { min-height: auto; max-height: 240px; overflow-y: auto; }
+}

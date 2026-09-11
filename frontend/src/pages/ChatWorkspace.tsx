@@ -11,6 +11,9 @@ import type { Conversation, Message } from "../types/chat";
 import { documents as documentService } from "../services/documents";
 import type { Document } from "../types/document";
 import { mcp } from "../services/mcp";
+import { agents, streamAgent, type AgentStreamEvent } from "../services/agents";
+import type { AgentRun } from "../types/agent";
+import { AgentRunCard } from "../components/agents/AgentRunCard";
 export function ChatWorkspace() {
   const { id } = useParams(),
     nav = useNavigate(),
@@ -22,6 +25,10 @@ export function ChatWorkspace() {
     [error, setError] = useState(""),
     [documents, setDocuments] = useState<Document[]>([]),
     [selectedDocuments, setSelectedDocuments] = useState<string[]>([]),
+    [agentMode, setAgentMode] = useState(false),
+    [activeRun, setActiveRun] = useState<AgentRun | null>(null),
+    [agentEvents, setAgentEvents] = useState<AgentStreamEvent[]>([]),
+    [liveRunId, setLiveRunId] = useState<string | null>(null),
     abort = useRef<AbortController | null>(null),
     bottom = useRef<HTMLDivElement | null>(null),
     sending = useRef(false),
@@ -66,18 +73,22 @@ export function ChatWorkspace() {
       // URL navigation intentionally resets the selected server-backed thread.
       // oxlint-disable-next-line react/set-state-in-effect
       setMessages([]);
+      setActiveRun(null);
+      setAgentMode(false);
       return;
     }
     setError("");
-    Promise.all([service.get(id), service.messages(id)])
-      .then(([, m]) => { if (active && streamingConversation.current !== id) setMessages(m); })
+    Promise.all([service.get(id), service.messages(id), agents.list(id)])
+      .then(([, m, runs]) => { if (active && streamingConversation.current !== id) {
+        setMessages(m); setActiveRun(runs[0] || null); setAgentMode(runs.length > 0);
+      } })
       .catch((e) => { if (active) setError(safeError(e, "Unable to load this conversation.")); });
     return () => { active = false; };
   }, [id]);
   useEffect(() => {
     // Never return a DOM method's result as React's effect cleanup.
     void bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, activeRun]);
   async function create() {
     try {
       const x = await service.create();
@@ -111,6 +122,32 @@ export function ChatWorkspace() {
       }
     }
     streamingConversation.current = cid;
+    if (agentMode) {
+      setError("");
+      setAgentEvents([]);
+      setActiveRun(null);
+      abort.current = new AbortController();
+      try {
+        const run = await streamAgent(cid, text, selectedDocuments, abort.current.signal, (event) => {
+          if (event.event === "agent_run_started" && event.data.run_id) setLiveRunId(String(event.data.run_id));
+          if (event.event !== "complete") setAgentEvents((items) => [...items.slice(-7), event]);
+        });
+        setActiveRun(run);
+        setAgentEvents([]);
+        setLiveRunId(null);
+        setMessages(await service.messages(cid));
+        await loadList();
+      } catch (e) {
+        if ((e as Error).name !== "AbortError")
+          setError(safeError(e, "Unable to execute the agent run. Check the plan, tools, and provider configuration."));
+      } finally {
+        sending.current = false;
+        streamingConversation.current = null;
+        setLiveRunId(null);
+        setGenerating(false);
+      }
+      return;
+    }
     const now = new Date().toISOString(),
       user: Message = {
         id: crypto.randomUUID(),
@@ -211,6 +248,30 @@ export function ChatWorkspace() {
       setError(safeError(e, "Unable to resolve this tool approval."));
     }
   }
+  async function resolveAgentApproval(approvalId: string, approve: boolean) {
+    if (!activeRun || sending.current) return;
+    sending.current = true; setGenerating(true); setError("");
+    try {
+      if (approve) await mcp.approve(approvalId); else await mcp.deny(approvalId);
+      setActiveRun(await agents.get(activeRun.id));
+      if (id) setMessages(await service.messages(id));
+      await loadList();
+    } catch (e) {
+      setError(safeError(e, "Unable to resolve this agent approval."));
+    } finally { sending.current = false; setGenerating(false); }
+  }
+  async function cancelAgent() {
+    if (!activeRun || sending.current) return;
+    try { setActiveRun(await agents.cancel(activeRun.id)); }
+    catch (e) { setError(safeError(e, "Unable to cancel this agent run.")); }
+  }
+  async function cancelLiveAgent() {
+    if (!liveRunId) return;
+    try {
+      const run = await agents.cancel(liveRunId);
+      setActiveRun(run); setAgentEvents([]); setLiveRunId(null); abort.current?.abort();
+    } catch (e) { setError(safeError(e, "Unable to cancel this agent run.")); }
+  }
   function remove(x: Conversation) {
     if (sending.current) return;
     if (confirm(`Delete “${x.title}”?`))
@@ -242,6 +303,15 @@ export function ChatWorkspace() {
                   onApproval={(approvalId, approve) => void resolveApproval(m.id, approvalId, approve)}
                 />
               ))}
+              {agentMode && agentEvents.length > 0 && !activeRun && <section className="agent-live-events">
+                <strong>Agent execution</strong>{agentEvents.map((event, index) => <span key={`${event.event}-${index}`}>
+                  {event.event.replaceAll("_", " ")}{event.data.title ? ` — ${String(event.data.title)}` : ""}
+                </span>)}{liveRunId && <button onClick={() => void cancelLiveAgent()}>Cancel run</button>}
+              </section>}
+              {agentMode && activeRun && <AgentRunCard run={activeRun}
+                onApprove={(approvalId) => void resolveAgentApproval(approvalId, true)}
+                onDeny={(approvalId) => void resolveAgentApproval(approvalId, false)}
+                onCancel={() => void cancelAgent()} />}
               <div ref={bottom} />
             </>
           ) : (
@@ -249,6 +319,10 @@ export function ChatWorkspace() {
           )}
         </div>
         {error && <div className="chat-error">{error}</div>}
+        <div className="chat-mode-toggle" role="group" aria-label="Execution mode">
+          <button className={!agentMode ? "active" : ""} disabled={generating} onClick={() => setAgentMode(false)}>Chat</button>
+          <button className={agentMode ? "active" : ""} disabled={generating} onClick={() => setAgentMode(true)}>Agent</button>
+        </div>
         <div className="knowledge-select">
           <select
             aria-label="Attach knowledge"

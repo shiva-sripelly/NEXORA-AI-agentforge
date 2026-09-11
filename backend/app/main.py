@@ -13,6 +13,7 @@ from app.api.conversations.router import router as conversations_router
 from app.api.chat.router import router as chat_router
 from app.api.documents.router import router as documents_router
 from app.api.mcp import router as mcp_router
+from app.api.agents import router as agents_router
 from app.ai.embeddings.factory import get_embedding_provider
 from app.ai.llm.factory import llm_factory
 from app.core.config import settings
@@ -62,3 +63,4 @@ app.include_router(conversations_router,prefix="/api")
 app.include_router(chat_router,prefix="/api")
 app.include_router(documents_router,prefix="/api")
 app.include_router(mcp_router,prefix="/api")
+app.include_router(agents_router,prefix="/api")

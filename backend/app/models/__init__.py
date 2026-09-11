@@ -3,5 +3,6 @@ from app.models.user import User, UserRole
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.document import Document,DocumentChunk,DocumentStatus,MessageSource
 from app.models.mcp import ApprovalRequest, MCPConnection, MCPTool, ToolCall
+from app.models.agent import AgentRun, AgentStep
 
-__all__ = ["User","UserRole","UserSession","Conversation","Message","MessageRole","Document","DocumentChunk","DocumentStatus","MessageSource","MCPConnection","MCPTool","ToolCall","ApprovalRequest"]
+__all__ = ["User","UserRole","UserSession","Conversation","Message","MessageRole","Document","DocumentChunk","DocumentStatus","MessageSource","MCPConnection","MCPTool","ToolCall","ApprovalRequest","AgentRun","AgentStep"]
