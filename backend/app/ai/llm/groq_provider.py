@@ -35,6 +35,22 @@ class GroqProvider(BaseLLMProvider):
   try:arguments=json.loads(function.get("arguments") or "{}")
   except json.JSONDecodeError:return None
   return LLMToolCall(id=call.get("id") or "agentforge-tool-call",name=function.get("name","")[:120],arguments=arguments)
+ async def complete_json(self,messages:list[LLMMessage],model:str)->dict:
+  headers={"Authorization":f"Bearer {settings.groq_api_key}","Content-Type":"application/json"}
+  payload={"model":model,"messages":messages,"stream":False,"response_format":{"type":"json_object"},
+   "reasoning_effort":"low","max_completion_tokens":4096,"temperature":0.1}
+  async with httpx.AsyncClient(timeout=60) as client:
+   response=await client.post("https://api.groq.com/openai/v1/chat/completions",headers=headers,json=payload)
+   response.raise_for_status();packet=response.json()
+  if packet.get("error"):
+   raise LLMProviderResponseError("The AI provider could not create a structured response.")
+  content=((packet.get("choices") or [{}])[0].get("message") or {}).get("content")
+  try:value=json.loads(content or "")
+  except (json.JSONDecodeError,TypeError) as exc:
+   raise LLMProviderResponseError("The AI provider returned invalid structured JSON.") from exc
+  if not isinstance(value,dict):
+   raise LLMProviderResponseError("The AI provider returned an invalid structured object.")
+  return value
  async def stream_with_tool_result(self,messages:list[LLMMessage],model:str,call:LLMToolCall,result:dict)->AsyncIterator[str]:
   tool_call={"id":call.id,"type":"function","function":{"name":call.name,"arguments":json.dumps(call.arguments)}}
   enriched=messages+[{"role":"assistant","content":"","tool_calls":[tool_call]},

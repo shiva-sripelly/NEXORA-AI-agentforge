@@ -258,6 +258,7 @@ export function ChatWorkspace() {
       await loadList();
     } catch (e) {
       setError(safeError(e, "Unable to resolve this agent approval."));
+      try { setActiveRun(await agents.get(activeRun.id)); } catch { /* Keep the stale-approval error. */ }
     } finally { sending.current = false; setGenerating(false); }
   }
   async function cancelAgent() {

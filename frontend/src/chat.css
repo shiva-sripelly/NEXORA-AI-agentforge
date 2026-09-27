@@ -1,7 +1,10 @@
 .chat-workspace {
-  height: calc(100vh - 72px);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   overflow: hidden;
 }
 .conversation-list {
@@ -13,6 +16,10 @@
   background: #0d0f14;
   padding: 16px !important;
   display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .conversation-list header {
   display: flex;
@@ -40,7 +47,10 @@
   margin-bottom: 15px;
 }
 .conversation-list > div {
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   align-content: start;
   gap: 4px;
@@ -90,6 +100,7 @@
 .chat-main {
   position: relative !important;
   margin: 0 !important;
+  min-width: 0;
   min-height: 0 !important;
   display: flex;
   flex-direction: column;
@@ -97,11 +108,18 @@
 }
 .messages {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
-  padding: 34px max(30px, calc((100% - 820px) / 2)) 150px;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 34px max(30px, calc((100% - 820px) / 2)) 24px;
 }
 .chat-empty {
-  min-height: 65vh;
+  width: min(620px, 100%);
+  min-height: 100%;
+  margin: auto;
+  padding-block: 24px;
   display: grid;
   place-content: center;
   text-align: center;
@@ -228,10 +246,9 @@
 .tool-activity > div { display: flex; gap: 7px; margin-top: 6px; }
 .tool-activity button { border: 1px solid #493b69; background: #211831; border-radius: 6px; padding: 5px 9px; }
 .composer {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  translate: -50%;
+  position: relative;
+  flex-shrink: 0;
+  margin: 8px auto;
   width: min(820px, calc(100% - 40px));
   padding: 12px 12px 30px;
   border: 1px solid #2a2e38;
@@ -273,10 +290,10 @@
   font-size: 9px;
 }
 .chat-error {
-  position: absolute;
-  bottom: 100px;
-  left: 50%;
-  translate: -50%;
+  position: relative;
+  flex-shrink: 0;
+  width: min(820px, calc(100% - 40px));
+  margin: 8px auto;
   background: #31171d;
   color: #f9a8b2;
   padding: 8px;

@@ -98,7 +98,9 @@ export function AppLayout() {
             </button>
           </div>
         </header>
-        <Outlet />
+        <div className="app-content">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

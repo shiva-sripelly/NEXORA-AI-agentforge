@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from jsonschema import ValidationError, validate
 from sqlalchemy import select, update
 
-from app.ai.agents.planner import AgentPlanError, AgentPlanner, PlanValidator
+from app.ai.agents.planner import AgentPlanError, AgentPlanner, PlanValidator, required_tool_names
 from app.ai.agents.references import StepReferenceError, resolve_references
 from app.ai.agents.state import AgentState
 from app.ai.llm.factory import llm_factory
@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.models.agent import AgentRun, AgentRunStatus, AgentStep, AgentStepStatus, AgentStepType
 from app.models.conversation import MessageRole
 from app.models.document import MessageSource
-from app.models.mcp import ToolCall, ToolCallStatus
+from app.models.mcp import ApprovalStatus, ToolCall, ToolCallStatus
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.conversation_repository import MessageRepository
 from app.repositories.document_repository import DocumentRepository
@@ -28,6 +28,8 @@ from app.services.tool_execution_service import ToolExecutionService, result_sum
 
 log = logging.getLogger(__name__)
 _active_runs: set[str] = set()
+TERMINAL_RUN_STATUSES = {AgentRunStatus.completed, AgentRunStatus.failed, AgentRunStatus.cancelled,
+    AgentRunStatus.max_steps_reached}
 
 
 def now():
@@ -60,7 +62,8 @@ class AgentOrchestrator:
         tool_specs = [{"name": item.external_name, "description": item.description, "input_schema": item.input_schema} for item in available]
         document_specs = [{"id": str(item.id), "name": item.display_name} for item in documents]
         provider = llm_factory.get_provider(conversation.model_provider)
-        require_tool = "tool" in data.goal.casefold().split()
+        required_tools = required_tool_names(data.goal, tool_specs, document_specs)
+        require_tool = bool(required_tools) or "tool" in data.goal.casefold().split()
         log.info("agent_planner_tools run_id=%s enabled_tools=%s", run.id,
             [item.external_name for item in available])
         try:
@@ -73,22 +76,32 @@ class AgentOrchestrator:
                 plan = await self.planner.create_plan(provider, conversation.model_name, data.goal, tool_specs,
                     document_specs, settings.agent_max_steps, require_tool,
                     "The previous response did not match the required plan schema. Return only the exact JSON shape requested.")
-            if require_tool and not any(step.step_type == "tool" for step in plan.steps):
+            selected_tools = {step.tool_name for step in plan.steps if step.step_type == "tool"}
+            missing_tools = set(required_tools) - selected_tools
+            if (require_tool and not selected_tools) or missing_tools:
                 if settings.agent_max_replans <= 0:
                     raise AgentPlanError("The requested MCP tool is not enabled, connected, or selected by the planner.")
                 plan = await self.planner.create_plan(provider, conversation.model_name, data.goal, tool_specs,
                     document_specs, settings.agent_max_steps, True,
-                    "The previous plan omitted required tool execution. Select an appropriate enabled tool and end with a final step.")
+                    "The previous plan omitted required tool execution. Include every tool in required_tools in dependency order and end with a final step.")
             await self.db.refresh(run)
             if run.status == AgentRunStatus.cancelled:
                 return await self.runs.owned(run.id, user.id)
-            if documents and not any(step.step_type == "rag" for step in plan.steps):
+            if documents and not require_tool:
+                # A selected Knowledge Base document is already available through RAG. For a
+                # knowledge-only request, do not let filename-shaped document names turn into
+                # File/Analytics MCP work.
+                plan = ExecutionPlan(goal=plan.goal, steps=[
+                    PlannedStep(step_number=1, type="rag", title="Retrieve selected knowledge"),
+                    PlannedStep(step_number=2, type="final", title="Answer from retrieved knowledge"),
+                ])
+            elif documents and not any(step.step_type == "rag" for step in plan.steps):
                 plan = ExecutionPlan(goal=plan.goal, steps=[PlannedStep(step_number=1, type="rag",
                     title="Retrieve selected knowledge")] + [step.model_copy(update={"step_number": step.step_number + 1})
                     for step in plan.steps])
             by_name = {item.external_name: item for item in available}
             PlanValidator().validate(plan, by_name, bool(documents), settings.agent_max_steps,
-                settings.agent_max_tool_calls, require_tool)
+                settings.agent_max_tool_calls, require_tool, required_tools)
             for planned in plan.steps:
                 tool = by_name.get(planned.tool_name) if planned.tool_name else None
                 self.db.add(AgentStep(run=run, step_number=planned.step_number,
@@ -110,6 +123,9 @@ class AgentOrchestrator:
             log.info("agent_run_cancelled user_id=%s run_id=%s reason=planning_disconnected", user.id, run.id)
             raise
         except Exception as exc:
+            await self.db.refresh(run)
+            if run.status in TERMINAL_RUN_STATUSES:
+                return await self.runs.owned(run.id, user.id)
             exceeded = isinstance(exc, AgentPlanError) and "maximum step limit" in str(exc)
             run.status = AgentRunStatus.max_steps_reached if exceeded else AgentRunStatus.failed
             run.failed_at = now()
@@ -131,7 +147,7 @@ class AgentOrchestrator:
         try:
             run = await self.runs.owned(run_id, user.id, lock=True)
             if not run: raise HTTPException(404, "Agent run not found")
-            if run.status in (AgentRunStatus.completed, AgentRunStatus.failed, AgentRunStatus.cancelled, AgentRunStatus.max_steps_reached):
+            if run.status in TERMINAL_RUN_STATUSES:
                 return run
             if any(step.status == AgentStepStatus.running for step in run.steps):
                 return run
@@ -152,7 +168,7 @@ class AgentOrchestrator:
                 rag_sources = await RAGService(self.db).retrieve(user.id, state.selected_documents, run.goal)
             for step in run.steps:
                 await self.db.refresh(run)
-                if run.status == AgentRunStatus.cancelled:
+                if run.status in TERMINAL_RUN_STATUSES:
                     return run
                 if step.status != AgentStepStatus.pending:
                     continue
@@ -171,7 +187,8 @@ class AgentOrchestrator:
                             state.selected_documents, run.goal), timeout=settings.agent_step_timeout_seconds)
                         step.result = {"sources": [{"document_id": str(item["chunk"].document_id),
                             "document_chunk_id": str(item["chunk"].id), "document_name": item["document_name"],
-                            "page": item["page"], "rank": item["rank"], "score": item["score"]} for item in rag_sources]}
+                            "page": item["page"], "rank": item["rank"], "score": item["score"],
+                            "content": item["chunk"].content} for item in rag_sources]}
                         step.result_summary = f"Retrieved {len(rag_sources)} document excerpts."
                     elif step.step_type == AgentStepType.tool:
                         if not step.tool or not step.mcp_tool_id:
@@ -180,9 +197,18 @@ class AgentOrchestrator:
                         validate(instance=resolved, schema=step.tool.input_schema)
                         log.info("agent_tool_requested run_id=%s step=%s tool=%s", run.id, step.step_number, step.tool.external_name)
                         call = await asyncio.wait_for(ToolExecutionService(self.db).execute(user, step.mcp_tool_id,
-                            resolved, run.conversation_id), timeout=settings.agent_step_timeout_seconds)
+                            resolved, run.conversation_id, run.id), timeout=settings.agent_step_timeout_seconds)
                         step.tool_call_id = call.id; step.tool_call = call
                         if call.status == ToolCallStatus.awaiting_approval:
+                            if await self._run_is_terminal(run.id):
+                                call.status = ToolCallStatus.denied; call.completed_at = now()
+                                if call.approval and call.approval.status == ApprovalStatus.pending:
+                                    call.approval.status = ApprovalStatus.cancelled
+                                    call.approval.reason = "Agent run was cancelled before approval."
+                                    call.approval.resolved_at = now(); call.approval.resolved_by = user.id
+                                step.status = AgentStepStatus.cancelled; step.completed_at = now()
+                                await self.db.commit()
+                                return await self.runs.owned(run.id, user.id)
                             step.status = AgentStepStatus.awaiting_approval
                             run.status = AgentRunStatus.awaiting_approval
                             await self.db.commit()
@@ -200,6 +226,8 @@ class AgentOrchestrator:
                         step.result = {"answer_created": True}
                         step.result_summary = "Final answer prepared."
                         run.final_answer = answer
+                    if await self._run_is_terminal(run.id):
+                        return await self.runs.owned(run.id, user.id)
                     step.status = AgentStepStatus.completed; step.completed_at = now()
                     state.completed_steps.append(step.step_number)
                     if step.result is not None: state.previous_results[step.step_number] = step.result
@@ -209,6 +237,8 @@ class AgentOrchestrator:
                         "step_number": step.step_number, "title": step.title,
                         "result_summary": step.result_summary})
                 except Exception as exc:
+                    if await self._run_is_terminal(run.id):
+                        return await self.runs.owned(run.id, user.id)
                     await self._record_failed_call(step, user.id, run.conversation_id)
                     step.status = AgentStepStatus.failed; step.completed_at = now(); step.error_message = self._safe_error(exc)
                     run.status = AgentRunStatus.failed; run.failed_at = now(); run.error_message = step.error_message
@@ -221,6 +251,8 @@ class AgentOrchestrator:
                         "step_number": step.step_number, "title": step.title, "message": step.error_message})
                     await self._emit(emit, "agent_run_failed", {"run_id": str(run.id), "message": run.error_message})
                     return await self.runs.owned(run.id, user.id)
+            if await self._run_is_terminal(run.id):
+                return await self.runs.owned(run.id, user.id)
             run.status = AgentRunStatus.completed; run.completed_at = now(); run.current_step = run.total_steps
             await self.db.commit()
             log.info("agent_run_completed run_id=%s", run.id)
@@ -228,11 +260,8 @@ class AgentOrchestrator:
             return await self.runs.owned(run.id, user.id)
         except asyncio.CancelledError:
             interrupted = await self.runs.owned(run_id, user.id)
-            if interrupted and interrupted.status not in (AgentRunStatus.completed, AgentRunStatus.failed):
-                interrupted.status = AgentRunStatus.cancelled; interrupted.completed_at = now()
-                for step in interrupted.steps:
-                    if step.status in (AgentStepStatus.pending, AgentStepStatus.running):
-                        step.status = AgentStepStatus.cancelled
+            if interrupted and interrupted.status not in TERMINAL_RUN_STATUSES:
+                self._mark_cancelled(interrupted, user.id, "Agent run stream disconnected.")
                 await self.db.commit()
                 log.info("agent_run_cancelled user_id=%s run_id=%s reason=stream_disconnected", user.id, run_id)
             raise
@@ -240,8 +269,11 @@ class AgentOrchestrator:
             _active_runs.discard(key)
 
     async def resume_run(self, user, run_id: UUID):
-        run = await self.runs.owned(run_id, user.id)
+        await ToolExecutionService(self.db).expire_pending(user.id)
+        run = await self.runs.owned(run_id, user.id, lock=True)
         if not run: raise HTTPException(404, "Agent run not found")
+        if run.status in TERMINAL_RUN_STATUSES:
+            return run
         if run.status == AgentRunStatus.awaiting_approval:
             waiting = next((step for step in run.steps if step.status == AgentStepStatus.awaiting_approval), None)
             if waiting and waiting.tool_call and waiting.tool_call.status == ToolCallStatus.completed:
@@ -256,29 +288,53 @@ class AgentOrchestrator:
         return await self.execute_run(user, run.id)
 
     async def handle_tool_resolution(self, user, call):
-        step = await self.runs.step_for_tool_call(call.id, user.id)
-        if not step:
+        located = await self.runs.step_for_tool_call(call.id, user.id)
+        if not located:
             return None
+        run = await self.runs.owned(located.agent_run_id, user.id, lock=True)
+        if run.status in TERMINAL_RUN_STATUSES:
+            return run
+        step = next((item for item in run.steps if item.tool_call_id == call.id), None)
+        if (run.status != AgentRunStatus.awaiting_approval or not step
+                or step.status != AgentStepStatus.awaiting_approval):
+            return run
         if call.status == ToolCallStatus.completed:
             step.status = AgentStepStatus.completed; step.result = call.result
             step.result_summary = result_summary(call.tool_name, call.result); step.completed_at = now()
-            step.run.status = AgentRunStatus.running
+            run.status = AgentRunStatus.running
             await self.db.commit()
-            return await self.execute_run(user, step.run.id)
+            return await self.execute_run(user, run.id)
         if call.status == ToolCallStatus.denied:
-            return await self._denied(step.run, step)
-        return step.run
+            return await self._denied(run, step)
+        return run
 
     async def cancel_run(self, user, run_id: UUID):
         run = await self.runs.owned(run_id, user.id, lock=True)
         if not run: raise HTTPException(404, "Agent run not found")
-        if run.status in (AgentRunStatus.completed, AgentRunStatus.failed, AgentRunStatus.cancelled):
+        if run.status in TERMINAL_RUN_STATUSES and run.status != AgentRunStatus.cancelled:
             return run
-        run.status = AgentRunStatus.cancelled; run.completed_at = now()
-        for step in run.steps:
-            if step.status == AgentStepStatus.pending: step.status = AgentStepStatus.cancelled
+        self._mark_cancelled(run, user.id, "Agent run cancelled.")
+        await ToolExecutionService(self.db).governance.record_event(user.id, "agent_run_cancelled",
+            agent_run_id=run.id, metadata={"reason": "Agent run cancelled."})
         await self.db.commit(); log.info("agent_run_cancelled user_id=%s run_id=%s", user.id, run.id)
         return await self.runs.owned(run.id, user.id)
+
+    @staticmethod
+    def _mark_cancelled(run, user_id, reason):
+        run.status = AgentRunStatus.cancelled
+        if run.completed_at is None:
+            run.completed_at = now()
+        for step in run.steps:
+            if step.status in (AgentStepStatus.pending, AgentStepStatus.running,
+                    AgentStepStatus.awaiting_approval):
+                step.status = AgentStepStatus.cancelled; step.completed_at = now()
+            call = step.tool_call
+            if call and call.status == ToolCallStatus.awaiting_approval:
+                call.status = ToolCallStatus.denied; call.completed_at = now()
+                if call.approval and call.approval.status == ApprovalStatus.pending:
+                    call.approval.status = ApprovalStatus.cancelled
+                    call.approval.reason = reason
+                    call.approval.resolved_at = now(); call.approval.resolved_by = user_id
 
     async def _final_answer(self, user, run, state, rag_sources):
         conversation = await ConversationService(self.db).require(run.conversation_id, user)
@@ -308,6 +364,10 @@ class AgentOrchestrator:
             ToolCall.conversation_id == conversation_id, ToolCall.mcp_tool_id == step.mcp_tool_id)
             .order_by(ToolCall.created_at.desc()).limit(1))
         if call: step.tool_call_id = call.id
+
+    async def _run_is_terminal(self, run_id):
+        status = await self.db.scalar(select(AgentRun.status).where(AgentRun.id == run_id))
+        return status in TERMINAL_RUN_STATUSES
 
     async def _denied(self, run, step):
         step.status = AgentStepStatus.failed; step.completed_at = now(); step.error_message = "Tool approval was denied."

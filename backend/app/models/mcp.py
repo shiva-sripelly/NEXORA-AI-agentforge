@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,8 @@ class ApprovalStatus(str, enum.Enum):
     pending = "pending"
     approved = "approved"
     denied = "denied"
+    cancelled = "cancelled"
+    expired = "expired"
 
 
 class MCPConnection(UUIDMixin, TimestampMixin, Base):
@@ -54,6 +56,7 @@ class MCPTool(UUIDMixin, Base):
     input_schema: Mapped[dict] = mapped_column(JSON, default=dict)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    approval_mode: Mapped[str] = mapped_column(String(20), default="never")
     risk_level: Mapped[str] = mapped_column(String(20), default="low")
     discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -104,9 +107,45 @@ class ApprovalRequest(UUIDMixin, Base):
     __tablename__ = "approval_requests"
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     tool_call_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("tool_calls.id", ondelete="CASCADE"), unique=True)
+    agent_run_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True, index=True)
     status: Mapped[ApprovalStatus] = mapped_column(Enum(ApprovalStatus, name="approval_status"), default=ApprovalStatus.pending)
     reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    risk_level: Mapped[str] = mapped_column(String(20), default="low")
+    tool_name_snapshot: Mapped[str] = mapped_column(String(120), default="unknown")
+    tool_arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    resolution_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     tool_call = relationship("ToolCall", back_populates="approval")
+    agent_run = relationship("AgentRun", lazy="selectin")
+
+
+class ToolPermissionPolicy(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "tool_permission_policies"
+    __table_args__ = (
+        CheckConstraint("effect IN ('allow', 'deny')", name="effect_values"),
+        CheckConstraint("approval_mode IS NULL OR approval_mode IN ('never', 'always', 'risk_based')",
+            name="approval_mode_values"),
+        CheckConstraint("NOT (user_id IS NOT NULL AND role IS NOT NULL)", name="single_subject"),
+        UniqueConstraint("tool_id", "user_id", name="uq_tool_policy_user"),
+        UniqueConstraint("tool_id", "role", name="uq_tool_policy_role"),
+    )
+    tool_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("mcp_tools.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    effect: Mapped[str] = mapped_column(String(10))
+    approval_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    tool = relationship("MCPTool", lazy="selectin")
+
+
+class AuditLog(UUIDMixin, Base):
+    __tablename__ = "audit_logs"
+    actor_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    tool_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("mcp_tools.id", ondelete="SET NULL"), nullable=True)
+    agent_run_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True)
+    approval_request_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("approval_requests.id", ondelete="SET NULL"), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

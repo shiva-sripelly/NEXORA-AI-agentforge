@@ -21,12 +21,20 @@ export function AgentRunsPage() {
   async function approval(id: string, approve: boolean) {
     if (busy || !selected) return; setBusy(true); setError("");
     try { if (approve) await mcp.approve(id); else await mcp.deny(id); await load(selected.id); }
-    catch (e) { setError(safeError(e, "Unable to resolve approval.")); }
+    catch (e) {
+      setError(safeError(e, "Unable to resolve approval."));
+      try { await load(selected.id); } catch { /* Keep the original approval error visible. */ }
+    }
     finally { setBusy(false); }
   }
   async function cancel() {
     if (busy || !selected) return; setBusy(true);
-    try { await agents.cancel(selected.id); await load(selected.id); }
+    try {
+      const cancelled = await agents.cancel(selected.id);
+      setSelected(cancelled);
+      setRuns((current) => current.map((run) => run.id === cancelled.id ? cancelled : run));
+      await load(selected.id);
+    }
     catch (e) { setError(safeError(e, "Unable to cancel agent run.")); }
     finally { setBusy(false); }
   }

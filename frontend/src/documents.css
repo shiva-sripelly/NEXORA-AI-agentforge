@@ -134,10 +134,9 @@
   color: #fda4af;
 }
 .knowledge-select {
-  position: absolute;
-  bottom: 94px;
-  left: 50%;
-  translate: -50%;
+  position: relative;
+  flex-shrink: 0;
+  margin: 8px auto;
   width: min(820px, calc(100% - 40px));
   display: flex;
   gap: 7px;
@@ -165,19 +164,6 @@
   }
 }
 
-/* Keep wrapped source chips and errors above the composer without overlap. */
-.chat-main .messages { min-height: 0; padding-bottom: 24px; }
-.chat-main .knowledge-select,
-.chat-main .composer,
-.chat-main .chat-error {
-  position: relative;
-  bottom: auto;
-  left: auto;
-  translate: none;
-  flex-shrink: 0;
-  margin: 8px auto;
-  width: min(820px, calc(100% - 40px));
-}
 .knowledge-select { max-height: 140px; overflow-y: auto; }
 .message-sources { display: grid; gap: 4px; margin-top: 12px; font-size: 12px; color: #bcaaf3; }
 .message-sources span { overflow-wrap: anywhere; }

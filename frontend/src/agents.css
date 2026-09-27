@@ -20,11 +20,13 @@
 }
 .chat-mode-toggle button.active { background: #6f48dc; color: white; }
 .agent-run-card {
+  min-width: 0;
   margin: 18px 0;
   padding: 16px;
   border: 1px solid #332b47;
   border-radius: 13px;
   background: linear-gradient(145deg, #14111d, #0f1117);
+  overflow-wrap: anywhere;
 }
 .agent-live-events {
   margin: 18px 0;
@@ -58,7 +60,7 @@
 .agent-progress span { display: block; height: 100%; background: #895ff2; transition: width .2s; }
 .agent-run-card > p { margin: 0 0 10px; color: #707786; font-size: 9px; }
 .agent-step-list { display: grid; gap: 7px; }
-.agent-step-list article { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 9px; border: 1px solid #262a34; border-radius: 8px; background: #0d0f14; }
+.agent-step-list article { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 9px; border: 1px solid #262a34; border-radius: 8px; background: #0d0f14; }
 .agent-step-list article > svg { width: 16px; color: #777d89; }
 .agent-step-list article.completed > svg { color: #45d6aa; }
 .agent-step-list article.failed > svg { color: #fb7185; }

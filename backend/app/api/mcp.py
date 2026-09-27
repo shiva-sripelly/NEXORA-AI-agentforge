@@ -1,15 +1,16 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.api.dependencies import CurrentUser, Db
 from app.repositories.approval_repository import ApprovalRepository
 from app.repositories.mcp_repository import MCPRepository
 from app.repositories.tool_call_repository import ToolCallRepository
-from app.schemas.mcp import ApprovalOut, ConnectionCreate, ConnectionOut, ToolCallOut, ToolExecute, ToolOut, ToolUpdate
+from app.schemas.mcp import ApprovalOut, ApprovalResolution, ConnectionCreate, ConnectionOut, ToolCallOut, ToolExecute, ToolOut, ToolUpdate
 from app.services.mcp_service import MCPService
 from app.services.tool_execution_service import ToolExecutionService, arguments_summary, result_summary
+from app.models.user import UserRole
 
 router = APIRouter(prefix="/mcp", tags=["MCP"])
 log = logging.getLogger(__name__)
@@ -24,7 +25,8 @@ def tool_out(item):
     return ToolOut(id=item.id, connection_id=item.connection_id, connection_name=item.connection.name,
         external_name=item.external_name, display_name=item.display_name, description=item.description,
         input_schema=item.input_schema, is_enabled=item.is_enabled, requires_approval=item.requires_approval,
-        risk_level=item.risk_level, discovered_at=item.discovered_at, updated_at=item.updated_at)
+        approval_mode=item.approval_mode, risk_level=item.risk_level,
+        discovered_at=item.discovered_at, updated_at=item.updated_at)
 
 
 def call_out(item, final_message_content=None):
@@ -37,10 +39,14 @@ def call_out(item, final_message_content=None):
 
 
 def approval_out(item):
-    return ApprovalOut(id=item.id, tool_call_id=item.tool_call_id, tool_name=item.tool_call.tool_name,
-        status=item.status.value, risk_level=item.tool_call.tool.risk_level,
-        arguments_summary=arguments_summary(item.tool_call.arguments), requested_at=item.requested_at,
-        resolved_at=item.resolved_at)
+    return ApprovalOut(id=item.id, tool_call_id=item.tool_call_id,
+        tool_name=item.tool_name_snapshot or item.tool_call.tool_name,
+        status=item.status.value, risk_level=item.risk_level,
+        arguments_summary=item.tool_arguments or arguments_summary(item.tool_call.arguments),
+        requested_at=item.requested_at, resolved_at=item.resolved_at, expires_at=item.expires_at,
+        reason=item.reason, resolution_note=item.resolution_note, resolved_by_user_id=item.resolved_by,
+        agent_run_id=item.agent_run_id, agent_goal=item.agent_run.goal if item.agent_run else None,
+        conversation_id=item.tool_call.conversation_id)
 
 
 @router.get("/connections", response_model=list[ConnectionOut])
@@ -83,10 +89,18 @@ async def tools(user: CurrentUser, db: Db):
 async def update_tool(tool_id: UUID, data: ToolUpdate, user: CurrentUser, db: Db):
     item = await MCPRepository(db).tool(tool_id, user.id)
     if not item:
-        from fastapi import HTTPException
         raise HTTPException(404, {"code": "MCP_TOOL_NOT_FOUND", "message": "MCP tool not found."})
     if data.is_enabled is not None: item.is_enabled = data.is_enabled
-    if data.requires_approval is not None: item.requires_approval = data.requires_approval
+    if data.requires_approval is not None:
+        item.requires_approval = data.requires_approval
+        item.approval_mode = "always" if data.requires_approval else "never"
+    if data.approval_mode is not None or data.risk_level is not None:
+        if user.role != UserRole.ADMIN:
+            raise HTTPException(403, {"code": "GOVERNANCE_ADMIN_REQUIRED", "message": "Admin access required."})
+        if data.approval_mode is not None:
+            item.approval_mode = data.approval_mode
+            item.requires_approval = data.approval_mode == "always"
+        if data.risk_level is not None: item.risk_level = data.risk_level
     await db.commit(); await db.refresh(item)
     return tool_out(item)
 
@@ -111,16 +125,31 @@ async def tool_call(call_id: UUID, user: CurrentUser, db: Db):
 
 @router.get("/approvals", response_model=list[ApprovalOut])
 async def approvals(user: CurrentUser, db: Db, pending: bool = True):
-    return [approval_out(item) for item in await ApprovalRepository(db).list(user.id, pending)]
+    return [approval_out(item) for item in await ToolExecutionService(db).list_approvals(user.id, pending)]
+
+
+@router.get("/approvals/{approval_id}", response_model=ApprovalOut)
+async def approval(approval_id: UUID, user: CurrentUser, db: Db):
+    await ToolExecutionService(db).expire_pending(user.id)
+    item = await ApprovalRepository(db).owned(approval_id, user.id)
+    if not item:
+        raise HTTPException(404, {"code": "MCP_APPROVAL_NOT_FOUND", "message": "Approval request not found."})
+    return approval_out(item)
 
 
 @router.post("/approvals/{approval_id}/approve", response_model=ToolCallOut)
-async def approve(approval_id: UUID, user: CurrentUser, db: Db):
+async def approve(approval_id: UUID, data: ApprovalResolution, user: CurrentUser, db: Db):
     service = ToolExecutionService(db)
-    call = await service.resolve(user, approval_id, True)
-    return call_out(call, await service.continue_approved_chat(user, call))
+    call = await service.resolve(user, approval_id, True, data.resolution_note)
+    from app.ai.agents.orchestrator import AgentOrchestrator
+    run = await AgentOrchestrator(db).handle_tool_resolution(user, call)
+    content = run.final_answer if run else await service.continue_approved_chat(user, call)
+    return call_out(call, content)
 
 
 @router.post("/approvals/{approval_id}/deny", response_model=ToolCallOut)
-async def deny(approval_id: UUID, user: CurrentUser, db: Db):
-    return call_out(await ToolExecutionService(db).resolve(user, approval_id, False))
+async def deny(approval_id: UUID, data: ApprovalResolution, user: CurrentUser, db: Db):
+    call = await ToolExecutionService(db).resolve(user, approval_id, False, data.resolution_note)
+    from app.ai.agents.orchestrator import AgentOrchestrator
+    await AgentOrchestrator(db).handle_tool_resolution(user, call)
+    return call_out(call)

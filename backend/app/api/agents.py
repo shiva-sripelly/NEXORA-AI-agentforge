@@ -25,7 +25,8 @@ def step_out(step):
     return AgentStepOut(id=step.id, step_number=step.step_number, step_type=step.step_type.value,
         title=step.title, description=step.description, tool_name=step.tool.external_name if step.tool else None,
         arguments_summary=summary, status=step.status.value, result_summary=step.result_summary,
-        error_message=step.error_message, approval_id=approval.id if approval and approval.status.value == "pending" else None,
+        error_message=step.error_message, approval_id=approval.id if approval and approval.status.value == "pending"
+        and step.run.status.value == "awaiting_approval" and step.status.value == "awaiting_approval" else None,
         started_at=step.started_at, completed_at=step.completed_at)
 
 

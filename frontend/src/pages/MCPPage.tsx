@@ -21,6 +21,7 @@ export function MCPPage() {
   }, []);
   useEffect(() => {
     let active = true;
+    // oxlint-disable-next-line react/set-state-in-effect -- initial server synchronization
     void load().catch((e) => { if (active) setError(safeError(e, "Unable to load MCP tools.")); });
     return () => { active = false; };
   }, [load]);

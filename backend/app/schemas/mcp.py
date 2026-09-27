@@ -18,13 +18,15 @@ class ConnectionOut(BaseModel):
 class ToolUpdate(BaseModel):
     is_enabled: bool | None = None
     requires_approval: bool | None = None
+    approval_mode: Literal["never", "always", "risk_based"] | None = None
+    risk_level: Literal["low", "medium", "high", "critical"] | None = None
     model_config = ConfigDict(extra="forbid")
 
 
 class ToolOut(BaseModel):
     id: UUID; connection_id: UUID; connection_name: str; external_name: str; display_name: str
     description: str | None; input_schema: dict[str, Any]; is_enabled: bool
-    requires_approval: bool; risk_level: str; discovered_at: datetime; updated_at: datetime
+    requires_approval: bool; approval_mode: str; risk_level: str; discovered_at: datetime; updated_at: datetime
 
 
 class ToolExecute(BaseModel):
@@ -44,3 +46,11 @@ class ToolCallOut(BaseModel):
 class ApprovalOut(BaseModel):
     id: UUID; tool_call_id: UUID; tool_name: str; status: str; risk_level: str
     arguments_summary: dict[str, Any]; requested_at: datetime; resolved_at: datetime | None
+    expires_at: datetime | None; reason: str | None; resolution_note: str | None
+    resolved_by_user_id: UUID | None; agent_run_id: UUID | None; agent_goal: str | None
+    conversation_id: UUID | None
+
+
+class ApprovalResolution(BaseModel):
+    resolution_note: str | None = Field(None, max_length=500)
+    model_config = ConfigDict(extra="forbid")

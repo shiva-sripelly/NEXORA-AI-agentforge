@@ -16,6 +16,8 @@ class BaseLLMProvider(ABC):
  @abstractmethod
  async def stream(self,messages:list[LLMMessage],model:str)->AsyncIterator[str]:...
  async def choose_tool(self,messages:list[LLMMessage],model:str,tools:list[dict])->LLMToolCall|None:return None
+ async def complete_json(self,messages:list[LLMMessage],model:str)->dict[str,Any]:
+  raise NotImplementedError
  async def stream_with_tool_result(self,messages:list[LLMMessage],model:str,call:LLMToolCall,result:dict)->AsyncIterator[str]:
   enriched=messages+[{"role":"system","content":f"A tool named {call.name} returned this JSON result: {result}. Answer the user from it without inventing values."}]
   async for chunk in self.stream(enriched,model):yield chunk

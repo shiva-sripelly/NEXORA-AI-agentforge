@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     mcp_file_root: str = "storage/mcp_workspace"
     mcp_server_root: str = "mcp_servers"
     mcp_timeout_seconds: float = 15.0
+    agent_max_steps: int = 8
+    agent_max_tool_calls: int = 6
+    agent_step_timeout_seconds: float = 60.0
+    agent_max_replans: int = 1
+    approval_expiry_minutes: int = 30
+    tool_approval_risk_threshold: str = "high"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
