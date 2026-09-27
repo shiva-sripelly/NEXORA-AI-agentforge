@@ -135,12 +135,16 @@ class ToolExecutionService:
             await self._expire(approval, agent_step)
             raise HTTPException(409, {"code": "MCP_APPROVAL_EXPIRED", "message": "Approval request has expired."})
         call = approval.tool_call
-        try: validate(instance=call.arguments, schema=call.tool.input_schema)
+        tool = await self.tools.tool(call.mcp_tool_id, user.id)
+        if not tool:
+            await self._invalidate(approval, agent_step, "The governed tool is no longer available.")
+            raise HTTPException(409, {"code": "MCP_APPROVAL_STALE", "message": "The governed tool is no longer available."})
+        try: validate(instance=call.arguments, schema=tool.input_schema)
         except ValidationError as exc:
             await self._invalidate(approval, agent_step, "Tool arguments are no longer valid.")
             raise HTTPException(409, {"code": "MCP_APPROVAL_STALE", "message": "Tool arguments are no longer valid."}) from exc
         if approve:
-            decision = await self.governance.evaluate_tool_execution(user, call.tool, call.arguments,
+            decision = await self.governance.evaluate_tool_execution(user, tool, call.arguments,
                 {"agent_run_id": approval.agent_run_id})
             if decision.decision == "deny":
                 await self._invalidate(approval, agent_step, decision.reason)
@@ -164,10 +168,10 @@ class ToolExecutionService:
             metadata={"risk_level": approval.risk_level})
         if agent_step:
             await self.db.flush()
-            await self._run(call, call.tool, commit_running=False)
+            await self._run(call, tool, commit_running=False)
         else:
             await self.db.commit()
-            await self._run(call, call.tool)
+            await self._run(call, tool)
         log.info("mcp_approval_approved user_id=%s tool_call_id=%s", user.id, call.id)
         return call
 

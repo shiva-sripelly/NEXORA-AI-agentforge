@@ -21,6 +21,13 @@ export function AgentRunCard({ run, onApprove, onDeny, onCancel }: {
         <small>{step.tool_name || step.step_type} · {step.status.replaceAll("_", " ")}</small>
         {step.result_summary && <small>{step.result_summary}</small>}
         {step.error_message && <small className="agent-step-error">{step.error_message}</small>}
+        {step.approval_status && <div className="agent-approval-details">
+          <span><b>Approval:</b> {step.approval_status.replaceAll("_", " ")}</span>
+          {step.approval_risk_level && <span><b>Risk:</b> {step.approval_risk_level.toUpperCase()}</span>}
+          {step.approval_reason && <span><b>Reason:</b> {step.approval_reason}</span>}
+          {step.approval_arguments && <span><b>Arguments:</b> <code>{JSON.stringify(step.approval_arguments)}</code></span>}
+          {step.approval_resolved_by_user_id && <span><b>Resolved by:</b> {step.approval_resolved_by_user_id.slice(0, 8)}</span>}
+        </div>}
         {run.status === "awaiting_approval" && step.status === "awaiting_approval" && step.approval_id && <div className="agent-approval">
           <button onClick={() => onApprove?.(step.approval_id!)}>Approve</button>
           <button onClick={() => onDeny?.(step.approval_id!)}>Deny</button>

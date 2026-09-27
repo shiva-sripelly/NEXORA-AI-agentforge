@@ -1,0 +1,31 @@
+.governance-page { width: min(1180px, 100%); margin: auto; padding: 38px; }
+.governance-page > header { margin-bottom: 24px; }
+.governance-page > header small { color: #a386fa; font-weight: 700; letter-spacing: 1px; }
+.governance-page > header h1 { margin: 6px 0; font: 700 32px Manrope; }
+.governance-page > header p { margin: 0; color: #747b88; }
+.governance-panel { margin: 14px 0; overflow: hidden; border: 1px solid #242832; border-radius: 12px; background: #0f1117; }
+.governance-panel h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 15px 18px; border-bottom: 1px solid #242832; font: 600 16px Manrope; }
+.governance-panel h2 svg { width: 17px; color: #a386fa; }
+.governance-panel h2 button { margin-left: auto; }
+.governance-panel article { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 18px; border-bottom: 1px solid #1d2028; }
+.governance-panel article:last-child { border-bottom: 0; }
+.governance-panel article > div:first-child { flex: 1; min-width: 0; }
+.governance-panel article strong, .governance-panel article small { display: block; }
+.governance-panel article small { margin-top: 4px; color: #747b88; overflow-wrap: anywhere; }
+.governance-panel label { display: grid; gap: 4px; color: #8b91a0; font-size: 10px; }
+.governance-panel select { padding: 6px 8px; border: 1px solid #332b47; border-radius: 7px; background: #15121d; color: #d6d9e1; }
+.governance-panel button { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: 1px solid #493b69; border-radius: 7px; background: #211831; }
+.governance-panel button svg { width: 14px; }
+.approval-summary { display: grid; gap: 5px; }
+.approval-summary > span { display: flex; gap: 6px; }
+.approval-status { padding: 3px 7px; border-radius: 10px; background: #302746; color: #cabaf5; font-size: 9px; text-transform: uppercase; }
+.approval-status.approved { background: #12372e; color: #78e3c2; }
+.approval-status.denied, .approval-status.expired { background: #391a22; color: #f7a0ad; }
+.approval-status.cancelled { background: #282b32; color: #a3a8b2; }
+.approval-actions { display: flex; flex: 0 0 auto !important; gap: 7px; }
+.audit-list article small { max-width: 850px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 760px) {
+  .governance-page { padding: 24px 14px; }
+  .governance-panel article { align-items: stretch; flex-direction: column; }
+  .approval-actions { flex-direction: row !important; }
+}

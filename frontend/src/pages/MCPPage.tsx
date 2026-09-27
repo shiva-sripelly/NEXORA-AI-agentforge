@@ -54,7 +54,7 @@ export function MCPPage() {
       </article>)}</section>
     <section className="mcp-panel"><h2><Wrench /> Available Tools</h2>
       {!tools.length ? <p className="mcp-empty">Connect a server to discover tools.</p> : tools.map((tool) => <article key={tool.id}>
-        <div><strong>{tool.display_name}</strong><small>{tool.description}<br />{tool.connection_name} · <b className={`risk ${tool.risk_level}`}>{tool.risk_level} risk</b></small></div>
+        <div><strong>{tool.display_name}</strong><small>{tool.description}<br />{tool.connection_name} · <b className={`risk ${tool.risk_level}`}>{tool.risk_level} risk</b> · Approval: {tool.approval_mode.replace("_", " ")}</small></div>
         <label><input type="checkbox" checked={tool.is_enabled} disabled={!!busy} onChange={(e) => action(`toggle-${tool.id}`, () => mcp.updateTool(tool.id, { is_enabled: e.target.checked }))} /> Enabled</label>
         <label><input type="checkbox" checked={tool.requires_approval} disabled={!!busy} onChange={(e) => action(`approval-${tool.id}`, () => mcp.updateTool(tool.id, { requires_approval: e.target.checked }))} /> Approval</label>
         <button disabled={!!busy || !tool.is_enabled} onClick={() => run(tool)}><Play /> Run</button>

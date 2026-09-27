@@ -48,6 +48,12 @@ class AgentStepOut(BaseModel):
     result_summary: str | None
     error_message: str | None
     approval_id: UUID | None
+    approval_status: str | None = None
+    approval_reason: str | None = None
+    approval_risk_level: str | None = None
+    approval_arguments: dict[str, Any] | None = None
+    approval_resolved_by_user_id: UUID | None = None
+    approval_expires_at: datetime | None = None
     started_at: datetime | None
     completed_at: datetime | None
 

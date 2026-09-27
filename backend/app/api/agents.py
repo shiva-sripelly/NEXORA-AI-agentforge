@@ -27,6 +27,12 @@ def step_out(step):
         arguments_summary=summary, status=step.status.value, result_summary=step.result_summary,
         error_message=step.error_message, approval_id=approval.id if approval and approval.status.value == "pending"
         and step.run.status.value == "awaiting_approval" and step.status.value == "awaiting_approval" else None,
+        approval_status=approval.status.value if approval else None,
+        approval_reason=approval.reason if approval else None,
+        approval_risk_level=approval.risk_level if approval else None,
+        approval_arguments=approval.tool_arguments if approval else None,
+        approval_resolved_by_user_id=approval.resolved_by if approval else None,
+        approval_expires_at=approval.expires_at if approval else None,
         started_at=step.started_at, completed_at=step.completed_at)
 
 
@@ -84,11 +90,13 @@ async def stream_run(data: AgentRunCreate, user: CurrentUser):
 @router.get("/runs", response_model=list[AgentRunOut])
 async def runs(user: CurrentUser, db: Db, conversation_id: UUID | None = None,
         limit: int = Query(100, ge=1, le=200)):
+    await ToolExecutionService(db).expire_pending(user.id)
     return [run_out(item) for item in await AgentRepository(db).list(user.id, conversation_id, limit)]
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunOut)
 async def get_run(run_id: UUID, user: CurrentUser, db: Db):
+    await ToolExecutionService(db).expire_pending(user.id)
     item = await AgentRepository(db).owned(run_id, user.id)
     if not item:
         from fastapi import HTTPException
@@ -98,6 +106,7 @@ async def get_run(run_id: UUID, user: CurrentUser, db: Db):
 
 @router.get("/runs/{run_id}/steps", response_model=list[AgentStepOut])
 async def steps(run_id: UUID, user: CurrentUser, db: Db):
+    await ToolExecutionService(db).expire_pending(user.id)
     item = await AgentRepository(db).owned(run_id, user.id)
     if not item:
         from fastapi import HTTPException

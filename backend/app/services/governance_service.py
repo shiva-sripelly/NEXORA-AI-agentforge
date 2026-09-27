@@ -24,6 +24,8 @@ def sanitize_arguments(value: Any, key: str = "") -> Any:
     """Create an audit/display snapshot without persisting obvious credentials."""
     if key.casefold() in SENSITIVE_KEYS or any(part in key.casefold() for part in ("password", "secret", "token", "key")):
         return "[REDACTED]"
+    if key.casefold() in {"text", "content", "body"} and isinstance(value, str):
+        return f"[TEXT {len(value)} characters]"
     if isinstance(value, dict):
         return {str(child_key)[:120]: sanitize_arguments(child, str(child_key))
             for child_key, child in list(value.items())[:100]}

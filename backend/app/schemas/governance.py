@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class GovernanceToolUpdate(BaseModel):
@@ -19,6 +19,12 @@ class PolicyCreate(BaseModel):
     effect: Literal["allow", "deny"]
     approval_mode: Literal["never", "always", "risk_based"] | None = None
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def one_subject_type(self):
+        if self.user_id is not None and self.role is not None:
+            raise ValueError("A policy may target a user or a role, not both")
+        return self
 
 
 class PolicyUpdate(BaseModel):

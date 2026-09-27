@@ -45,6 +45,7 @@ def approval_out(item):
         arguments_summary=item.tool_arguments or arguments_summary(item.tool_call.arguments),
         requested_at=item.requested_at, resolved_at=item.resolved_at, expires_at=item.expires_at,
         reason=item.reason, resolution_note=item.resolution_note, resolved_by_user_id=item.resolved_by,
+        resolved_by_name=item.resolver.name if item.resolver else None,
         agent_run_id=item.agent_run_id, agent_goal=item.agent_run.goal if item.agent_run else None,
         conversation_id=item.tool_call.conversation_id)
 
@@ -138,9 +139,9 @@ async def approval(approval_id: UUID, user: CurrentUser, db: Db):
 
 
 @router.post("/approvals/{approval_id}/approve", response_model=ToolCallOut)
-async def approve(approval_id: UUID, data: ApprovalResolution, user: CurrentUser, db: Db):
+async def approve(approval_id: UUID, user: CurrentUser, db: Db, data: ApprovalResolution | None = None):
     service = ToolExecutionService(db)
-    call = await service.resolve(user, approval_id, True, data.resolution_note)
+    call = await service.resolve(user, approval_id, True, data.resolution_note if data else None)
     from app.ai.agents.orchestrator import AgentOrchestrator
     run = await AgentOrchestrator(db).handle_tool_resolution(user, call)
     content = run.final_answer if run else await service.continue_approved_chat(user, call)
@@ -148,8 +149,8 @@ async def approve(approval_id: UUID, data: ApprovalResolution, user: CurrentUser
 
 
 @router.post("/approvals/{approval_id}/deny", response_model=ToolCallOut)
-async def deny(approval_id: UUID, data: ApprovalResolution, user: CurrentUser, db: Db):
-    call = await ToolExecutionService(db).resolve(user, approval_id, False, data.resolution_note)
+async def deny(approval_id: UUID, user: CurrentUser, db: Db, data: ApprovalResolution | None = None):
+    call = await ToolExecutionService(db).resolve(user, approval_id, False, data.resolution_note if data else None)
     from app.ai.agents.orchestrator import AgentOrchestrator
     await AgentOrchestrator(db).handle_tool_resolution(user, call)
     return call_out(call)

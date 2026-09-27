@@ -11,6 +11,8 @@ import {
   PlugZap,
   Search,
   Settings,
+  ShieldCheck,
+  SlidersHorizontal,
   Workflow,
   X,
 } from "lucide-react";
@@ -25,6 +27,7 @@ const links = [
   ["/app/knowledge", "Knowledge Base", BookOpen],
   ["/app/tools", "MCP Tools", PlugZap],
   ["/app/runs", "Agent Runs", Workflow],
+  ["/app/approvals", "Approvals", ShieldCheck],
   ["/app/analytics", "Analytics", ChartNoAxesCombined],
   ["/app/settings", "Settings", Settings],
 ] as const;
@@ -59,6 +62,9 @@ export function AppLayout() {
               {name === "MCP Tools" && <em />}
             </NavLink>
           ))}
+          {user?.role === "ADMIN" && <NavLink to="/app/settings/governance" onClick={() => setOpen(false)}>
+            <SlidersHorizontal />Governance
+          </NavLink>}
         </nav>
         <div className="user">
           <span>{user?.name.slice(0, 2).toUpperCase()}</span>

@@ -53,6 +53,8 @@ async def create_policy(data: PolicyCreate, user: AdminUser, db: Db):
     repo = GovernanceRepository(db)
     if not await repo.tool(data.tool_id):
         raise HTTPException(404, {"code": "MCP_TOOL_NOT_FOUND", "message": "MCP tool not found."})
+    if data.user_id is not None and not await db.get(User, data.user_id):
+        raise HTTPException(404, {"code": "GOVERNANCE_USER_NOT_FOUND", "message": "Policy user not found."})
     if await repo.conflicting_policy(data.tool_id, data.user_id, data.role):
         raise HTTPException(409, {"code": "GOVERNANCE_POLICY_CONFLICT", "message": "A policy already exists for this tool and subject."})
     item = ToolPermissionPolicy(**data.model_dump())

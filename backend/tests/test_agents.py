@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -312,6 +313,38 @@ async def test_attached_knowledge_document_uses_rag_then_final_and_persists_sour
 
 
 @pytest.mark.asyncio
+async def test_rag_and_mcp_agent_combination_still_completes(db, context, monkeypatch):
+    user, _, conversation = context
+    await configured_tools(db, user)
+    document = Document(user_id=user.id, original_filename="metrics.txt", display_name="metrics.txt",
+        content_type="text/plain", file_size=20, storage_path="knowledge/metrics.txt",
+        status=DocumentStatus.ready, chunk_count=1)
+    db.add(document); await db.flush()
+    chunk = DocumentChunk(document_id=document.id, chunk_index=0, content="Metrics context: 10, 20, 30.",
+        embedding=[0.0] * 384, metadata_json={})
+    db.add(chunk); await db.commit()
+    async def retrieve(*_):
+        return [{"chunk": chunk, "document_name": "metrics.txt", "page": None, "rank": 1, "score": .99}]
+    async def execute(_, _connection, name, arguments):
+        assert name == "calculate_statistics" and arguments == {"numbers": [10, 20, 30]}
+        return {"count": 3, "sum": 60, "mean": 20, "min": 10, "max": 30, "median": 20}
+    monkeypatch.setattr(RAGService, "retrieve", retrieve)
+    monkeypatch.setattr(MCPManager, "execute", execute)
+    monkeypatch.setattr(AgentOrchestrator, "_final_answer", fake_final)
+    plan = {"goal": "Use knowledge and calculate statistics", "steps": [
+        {"step_number": 1, "type": "rag", "title": "Retrieve knowledge"},
+        {"step_number": 2, "type": "tool", "title": "Calculate", "tool_name": "calculate_statistics",
+            "arguments": {"numbers": [10, 20, 30]}},
+        {"step_number": 3, "type": "final", "title": "Answer"}]}
+    run = await AgentOrchestrator(db, FixedPlanner(plan)).create_run(user, AgentRunCreate(
+        conversation_id=conversation.id, goal="Use attached knowledge and calculate statistics",
+        document_ids=[document.id]))
+    assert run.status == AgentRunStatus.completed
+    assert [step.step_type.value for step in run.steps] == ["rag", "tool", "final"]
+    assert run.steps[1].result["mean"] == 20
+
+
+@pytest.mark.asyncio
 async def test_approval_pauses_and_resume_is_idempotent(db, context, monkeypatch):
     user, _, conversation = context
     await configured_tools(db, user, read_approval=True)
@@ -375,7 +408,7 @@ async def test_cancel_invalidates_agent_approval_and_blocks_stale_resolution(db,
     assert repeated_cancel.completed_at == cancelled_at
     assert [step.status for step in repeated_cancel.steps] == [AgentStepStatus.cancelled] * 3
     assert repeated_cancel.steps[0].tool_call.status == ToolCallStatus.denied
-    assert repeated_cancel.steps[0].tool_call.approval.status == ApprovalStatus.denied
+    assert repeated_cancel.steps[0].tool_call.approval.status == ApprovalStatus.cancelled
     assert repeated_cancel.steps[0].tool_call.approval.reason == "Agent run cancelled."
 
     for approve in (True, False):
@@ -395,6 +428,33 @@ async def test_cancel_invalidates_agent_approval_and_blocks_stale_resolution(db,
     assert tool_executions == 0
     assert final_call_count == initial_call_count == 1
     assert final.final_answer is None and final_answers == 0
+
+
+@pytest.mark.asyncio
+async def test_expired_agent_approval_fails_run_without_tool_execution(db, context, monkeypatch):
+    user, _, conversation = context
+    await configured_tools(db, user, read_approval=True)
+    invoked = 0
+    async def execute(*_):
+        nonlocal invoked; invoked += 1
+    monkeypatch.setattr(MCPManager, "execute", execute)
+    plan = {"goal": "Read", "steps": [
+        {"step_number": 1, "type": "tool", "title": "Read", "tool_name": "read_text_file",
+            "arguments": {"path": "numbers.txt"}},
+        {"step_number": 2, "type": "final", "title": "Answer"}]}
+    run = await AgentOrchestrator(db, FixedPlanner(plan)).create_run(user,
+        AgentRunCreate(conversation_id=conversation.id, goal="Read"))
+    approval = run.steps[0].tool_call.approval
+    approval.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1); await db.commit()
+    with pytest.raises(HTTPException) as expired:
+        await ToolExecutionService(db).resolve(user, approval.id, True)
+    persisted = await AgentRepository(db).owned(run.id, user.id)
+    assert expired.value.detail["code"] == "MCP_APPROVAL_EXPIRED"
+    assert persisted.status == AgentRunStatus.failed
+    assert persisted.steps[0].status == AgentStepStatus.failed
+    assert persisted.steps[1].status == AgentStepStatus.skipped
+    assert persisted.steps[0].tool_call.approval.status == ApprovalStatus.expired
+    assert invoked == 0
 
 
 @pytest.mark.asyncio
@@ -497,3 +557,34 @@ async def test_real_file_to_analytics_mcp_flow(db, context, monkeypatch, tmp_pat
     assert run.steps[0].tool_call.status == ToolCallStatus.completed
     assert run.steps[1].tool_call.status == ToolCallStatus.completed
     assert run.steps[1].result == {"count": 5, "sum": 150, "mean": 30, "min": 10, "max": 50, "median": 30}
+
+
+@pytest.mark.asyncio
+async def test_missing_workspace_file_fails_safely(db, context, monkeypatch, tmp_path):
+    user, _, conversation = context
+    await configured_tools(db, user)
+    monkeypatch.setattr(settings, "mcp_file_root", str(tmp_path))
+    plan = {"goal": "Read missing file", "steps": [
+        {"step_number": 1, "type": "tool", "title": "Read", "tool_name": "read_text_file",
+            "arguments": {"path": "missing.txt"}},
+        {"step_number": 2, "type": "final", "title": "Answer"}]}
+    run = await AgentOrchestrator(db, FixedPlanner(plan)).create_run(user,
+        AgentRunCreate(conversation_id=conversation.id, goal="Read missing.txt"))
+    assert run.status == AgentRunStatus.failed
+    assert run.steps[0].status == AgentStepStatus.failed and run.steps[0].result is None
+    assert run.steps[1].status == AgentStepStatus.skipped and run.final_answer is None
+    assert run.error_message == "MCP tool reported an error"
+
+
+@pytest.mark.asyncio
+async def test_planning_over_maximum_steps_is_stopped(db, context):
+    user, _, conversation = context
+    await configured_tools(db, user)
+    steps = [{"step_number": number, "type": "tool", "title": f"Calculate {number}",
+        "tool_name": "calculate_statistics", "arguments": {"numbers": [number]}}
+        for number in range(1, settings.agent_max_steps + 1)]
+    steps.append({"step_number": settings.agent_max_steps + 1, "type": "final", "title": "Answer"})
+    run = await AgentOrchestrator(db, FixedPlanner({"goal": "Calculate statistics", "steps": steps})).create_run(
+        user, AgentRunCreate(conversation_id=conversation.id, goal="Calculate statistics"))
+    assert run.status == AgentRunStatus.max_steps_reached
+    assert run.error_message == "Maximum step limit reached."

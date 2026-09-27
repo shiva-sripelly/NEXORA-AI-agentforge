@@ -311,10 +311,17 @@ class AgentOrchestrator:
     async def cancel_run(self, user, run_id: UUID):
         run = await self.runs.owned(run_id, user.id, lock=True)
         if not run: raise HTTPException(404, "Agent run not found")
-        if run.status in TERMINAL_RUN_STATUSES and run.status != AgentRunStatus.cancelled:
+        if run.status in TERMINAL_RUN_STATUSES:
             return run
+        pending_approvals = [step.tool_call.approval for step in run.steps if step.tool_call
+            and step.tool_call.approval and step.tool_call.approval.status == ApprovalStatus.pending]
         self._mark_cancelled(run, user.id, "Agent run cancelled.")
-        await ToolExecutionService(self.db).governance.record_event(user.id, "agent_run_cancelled",
+        governance = ToolExecutionService(self.db).governance
+        for approval in pending_approvals:
+            await governance.record_event(user.id, "approval_cancelled",
+                tool_id=approval.tool_call.mcp_tool_id, agent_run_id=run.id,
+                approval_request_id=approval.id, metadata={"reason": "Agent run cancelled."})
+        await governance.record_event(user.id, "agent_run_cancelled",
             agent_run_id=run.id, metadata={"reason": "Agent run cancelled."})
         await self.db.commit(); log.info("agent_run_cancelled user_id=%s run_id=%s", user.id, run.id)
         return await self.runs.owned(run.id, user.id)

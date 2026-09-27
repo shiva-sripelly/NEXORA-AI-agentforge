@@ -10,6 +10,12 @@ export type AgentStep = {
   result_summary: string | null;
   error_message: string | null;
   approval_id: string | null;
+  approval_status: string | null;
+  approval_reason: string | null;
+  approval_risk_level: string | null;
+  approval_arguments: Record<string, unknown> | null;
+  approval_resolved_by_user_id: string | null;
+  approval_expires_at: string | null;
   started_at: string | null;
   completed_at: string | null;
 };

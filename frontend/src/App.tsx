@@ -10,6 +10,8 @@ import { ChatWorkspace } from "./pages/ChatWorkspace";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { MCPPage } from "./pages/MCPPage";
 import { AgentRunsPage } from "./pages/AgentRunsPage";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
+import { GovernancePage } from "./pages/GovernancePage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -29,6 +31,8 @@ export default function App() {
               <Route path="mcp" element={<MCPPage />} />
               <Route path="agents" element={<AgentRunsPage />} />
               <Route path="runs" element={<AgentRunsPage />} />
+              <Route path="approvals" element={<ApprovalsPage />} />
+              <Route path="settings/governance" element={<GovernancePage />} />
               <Route path="*" element={<ComingSoon />} />
             </Route>
           </Route>

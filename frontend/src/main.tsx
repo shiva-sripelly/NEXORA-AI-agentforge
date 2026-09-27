@@ -5,6 +5,7 @@ import "./chat.css";
 import "./documents.css";
 import "./mcp.css";
 import "./agents.css";
+import "./governance.css";
 import App from "./App.tsx";
 
 createRoot(document.getElementById("root")!).render(

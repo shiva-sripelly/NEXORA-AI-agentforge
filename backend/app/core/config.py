@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,8 +37,8 @@ class Settings(BaseSettings):
     agent_max_tool_calls: int = 6
     agent_step_timeout_seconds: float = 60.0
     agent_max_replans: int = 1
-    approval_expiry_minutes: int = 30
-    tool_approval_risk_threshold: str = "high"
+    approval_expiry_minutes: int = Field(default=30, ge=1, le=10080)
+    tool_approval_risk_threshold: Literal["low", "medium", "high", "critical"] = "high"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
